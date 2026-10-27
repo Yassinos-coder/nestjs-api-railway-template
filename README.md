@@ -4,7 +4,7 @@ A complete NestJS API server you can deploy on Railway in one click, run on your
 
 ## What it is, and what it is not
 
-It is a foundation: server setup, security basics, config, health check, and an example feature to copy. It does not include auth, users, payments or a frontend. You add those as feature modules.
+It is a foundation: server setup, security basics, config, health check, JWT login, and an example feature to copy. It does not include payments, roles, email or a frontend. You add those as feature modules.
 
 Building with an AI coding agent? Point it at [AGENTS.md](AGENTS.md).
 
@@ -15,8 +15,8 @@ Building with an AI coding agent? Point it at [AGENTS.md](AGENTS.md).
 - Environment variables validated at startup with Joi
 - Structured logs with `nestjs-pino`, with auth headers redacted
 - Interactive API docs at `/docs` (off in production unless `SWAGGER_ENABLED=true`)
-- `@nestjs/jwt` and `bcryptjs` preinstalled for adding login
-- Jest, ESLint with security rules, and `npm audit` ready to run
+- JWT authentication: `POST /auth/register`, `POST /auth/login`, protected `GET /auth/me`, bcrypt password hashing, strict rate limits (needs a database)
+- Tests with Node's built-in runner, ESLint with security rules, and `npm audit` ready to run
 - `nestjs-shield` configured entirely through environment variables
 - Redis storage for rate-limit counters (falls back to memory with a warning if Redis is unreachable)
 - Optional Postgres through a single `DATABASE_URL`
@@ -31,6 +31,8 @@ Two templates use this same repository:
 | --- | --- | --- |
 | Lite | API + Redis | You bring your own database (Supabase, Neon, RDS, ...) |
 | Full | API + Redis + Postgres | You want everything on Railway |
+
+Publishing steps for the maintainer are in [docs/RAILWAY_TEMPLATES.md](docs/RAILWAY_TEMPLATES.md).
 
 ## Environment variables
 
@@ -47,6 +49,10 @@ Two templates use this same repository:
 | `REDIS_URL` | empty (memory) | Redis connection string |
 | `DATABASE_URL` | empty (database off) | Any Postgres connection string |
 | `DATABASE_SSL` | `false` | Set `true` for hosts that require SSL, such as Supabase |
+| `JWT_SECRET` | random per boot in development | **Required in production**, at least 32 characters |
+| `JWT_EXPIRES_IN_SECONDS` | `3600` | How long login tokens last |
+
+Generate a secret with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
 
 ## Using your own database
 

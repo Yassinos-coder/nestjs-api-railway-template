@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-27
+
+### Added
+
+- JWT authentication: register, login and a protected `/auth/me` route, with bcrypt hashing, a reusable `JwtAuthGuard` and strict rate limits
+- `users` table created automatically at startup when a database is configured
+- `JWT_SECRET` and `JWT_EXPIRES_IN_SECONDS` settings, with production refusing to start without a strong secret
+- Railway template publishing guide in `docs/RAILWAY_TEMPLATES.md`
+
+### Changed
+
+- Tests now run on Node's built-in test runner instead of Jest, because Nest 12 packages are ESM-only
+- Minimum Node version raised to 22.12
+- Documentation clarifies that scanner probe protection is on by default
+
+### Verified
+
+- Redis-backed counters and bans, Postgres connection, Redis outage fallback to memory, and Postgres outage reported by `/health`
+
 ## [0.1.0] - 2026-10-27
 
 ### Added

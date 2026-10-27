@@ -4,6 +4,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { ShieldModule } from 'nestjs-shield';
 import configuration from './config/configuration';
 import { EnvValidator } from './config/validators/env.validator';
+import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { DemoModule } from './demo/demo.module';
@@ -26,6 +27,7 @@ import { DemoModule } from './demo/demo.module';
     }),
     ShieldModule.forEnv(),
     DatabaseModule,
+    AuthModule,
     HealthModule,
     DemoModule,
   ],

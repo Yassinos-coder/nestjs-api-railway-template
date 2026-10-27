@@ -29,7 +29,7 @@ async function bootstrap() {
   if (swaggerEnabled) {
     const document = SwaggerModule.createDocument(
       app,
-      new DocumentBuilder().setTitle('NestJS API').setVersion('0.1.0').addBearerAuth().build(),
+      new DocumentBuilder().setTitle('NestJS API').setVersion('0.2.0').addBearerAuth().build(),
     );
     SwaggerModule.setup('docs', app, document);
   }

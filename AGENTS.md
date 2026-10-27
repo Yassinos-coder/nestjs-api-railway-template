@@ -6,11 +6,11 @@ Instructions for AI coding agents (Claude Code, Codex, Cursor, Copilot, and othe
 
 A general-purpose NestJS API server ("NestJS API - Railway Template"). It is a starting point for building any REST API, not a Shield demo. `nestjs-shield` is one built-in layer that adds rate limiting, auto-ban and Redis-backed counters. The app is designed to deploy on Railway and also runs locally. Postgres is optional and driven by `DATABASE_URL`.
 
-Included: server bootstrap, security headers, input sanitization and validation, optional CORS, env validation, structured logging, API docs, health check, optional database access, Shield, tests, linting, and one example feature (`demo`).
+Included: server bootstrap, security headers, input sanitization and validation, optional CORS, env validation, structured logging, API docs, health check, optional database access, Shield, JWT authentication (register, login, protected route), tests, linting, and one example feature (`demo`).
 
-Not included: authentication, users, payments, migrations, a frontend. Add these as feature modules following the rules below.
+Not included: payments, roles and permissions, email, migrations, a frontend. Add these as feature modules following the rules below.
 
-Stack: NestJS 12, TypeScript 6, Express adapter, Node 20+.
+Stack: NestJS 12, TypeScript 6, Express adapter, Node 22.12 or newer. Nest 12 packages are ESM, and the compiled CommonJS output relies on Node's `require(esm)` support, so do not lower the Node version.
 
 ## Note for the person driving you
 
@@ -31,11 +31,30 @@ The user may not be a programmer and may only describe what they want in plain l
 | `compression` | gzip responses | `main.ts` |
 | `@nestjs/config` | Typed config | `src/config/configuration.ts` |
 | `pg` | Postgres client | `DatabaseRepository` |
-| `@nestjs/jwt`, `bcryptjs` | Installed for authentication. Not wired yet. Use `bcryptjs` to hash passwords and `@nestjs/jwt` for tokens when asked to add login | none yet |
-| `jest`, `ts-jest`, `supertest`, `@nestjs/testing` | Tests | `*.spec.ts` next to the code |
+| `@nestjs/jwt`, `bcryptjs` | JWT tokens and password hashing for the auth feature | `src/auth/` |
+| `node:test` (built into Node), `@nestjs/testing` | Tests | `*.spec.ts` next to the code |
 | `eslint`, `typescript-eslint`, `eslint-plugin-security` | Linting including security rules | `eslint.config.mjs` |
 
-If the user asks for login, signup or accounts, build auth with `@nestjs/jwt` and `bcryptjs`, put a strict `@RateLimit` on login and signup, never log or return password hashes, and never store plain-text passwords.
+## Authentication (already built)
+
+`src/auth/` provides:
+
+| Route | Protection | Purpose |
+| --- | --- | --- |
+| `POST /auth/register` | `@RateLimit` 5 per window | Create an account, returns a token |
+| `POST /auth/login` | `@RateLimit` 5 per window | Returns a token |
+| `GET /auth/me` | `JwtAuthGuard` | Returns the current user |
+
+To protect any route, add `@UseGuards(JwtAuthGuard)` and `@ApiBearerAuth()`. Import `AuthModule` in the feature module, since it exports the guard. The logged-in user is on `request.user` (`{ sub, email }`, typed as `AuthenticatedRequest`).
+
+Rules for anything touching accounts:
+
+- Passwords are hashed with `bcryptjs` (12 rounds). Never store, log or return a password or hash. Use `UserMapper.toPublic` for any user response.
+- Login returns the same error for an unknown email and a wrong password. Keep it that way.
+- Tokens are HS256 only, signed with `JWT_SECRET`. In production the app refuses to start without a secret of at least 32 characters. In development a random secret is generated at boot, so tokens stop working after a restart.
+- The `users` table is created automatically at startup when `DATABASE_URL` is set. Without a database, register and login return 503.
+- Strict `@RateLimit` routes share one bucket per IP, so login and register together allow about 5 attempts per window. Keep strict limits on any new sensitive route.
+- For roles, add a `role` column and a `RolesGuard` in `src/auth/guards/`. Do not trust a role sent by the client.
 
 ## Commands
 
@@ -44,12 +63,14 @@ If the user asks for login, signup or accounts, build auth with `@nestjs/jwt` an
 | `npm install` | Install dependencies |
 | `npm run build` | Compile to `dist/` |
 | `npm run lint` | Lint, including security rules |
-| `npm test` | Run tests |
+| `npm test` | Compile and run tests with Node's built-in test runner |
 | `npm run audit` | Check production dependencies for known vulnerabilities |
 | `npm run start:dev` | Run with file watching |
 | `npm run start` | Run the compiled app |
 
 Do not upgrade TypeScript to 7.x. The Nest CLI needs the compiler API, which 7.0 does not expose.
+
+Do not switch to Jest. Nest 12 packages are ESM-only and Jest cannot load them without a fragile setup. Write tests with `node:test` and `node:assert/strict`, as in the existing `*.spec.ts` files, and mock dependencies with `mock.fn` from `node:test`.
 
 ## Layout
 
@@ -61,6 +82,7 @@ src/
 ├── config/
 │   ├── configuration.ts     the only place that reads process.env for app settings
 │   └── validators/env.validator.ts   Joi schema for environment variables
+├── auth/                    register, login, JwtAuthGuard, users repository (full feature example)
 ├── database/
 │   ├── database.module.ts
 │   └── repositories/database.repository.ts   pg pool, query(), ping()
@@ -141,7 +163,9 @@ Shield is registered once in `app.module.ts` with `ShieldModule.forEnv()` and ap
 
 - Use a strict `@RateLimit` on login, signup, password reset and any expensive route.
 - Use `@SkipShield()` only for infrastructure routes such as `/health`.
-- For options `forEnv()` does not expose (probes, whitelist, blacklist, custom keys), switch `app.module.ts` to `ShieldModule.forRoot({ ... })` or `forRootAsync`. Full options: https://github.com/yassinos-coder/nestjs-shield
+- Scanner probes (requests to paths like `/.env`) count toward auto-ban by default (`SHIELD_PROBES=true`). Repeated offenders get a `403` ban, stored in Redis when available.
+- `forEnv()` also reads `SHIELD_AUTOBAN_THRESHOLD`, `SHIELD_AUTOBAN_WINDOW`, `SHIELD_AUTOBAN_DURATION`, `SHIELD_BURST_MAX`, `SHIELD_MAX_BODY_BYTES` and `SHIELD_ALGORITHM`. For options it does not expose (whitelist, blacklist, custom keys), switch `app.module.ts` to `ShieldModule.forRoot({ ... })` or `forRootAsync`. Full options: <https://github.com/yassinos-coder/nestjs-shield>
+- The Shield admin dashboard is off. Leave it off unless the user asks, and then protect it with `SHIELD_ADMIN_USER` and `SHIELD_ADMIN_PASSWORD`.
 - Behind Railway the real client IP depends on `SHIELD_TRUST_PROXY`. Keep it set to `cloudflare`.
 - If Redis is unreachable, Shield falls back to in-memory counters and logs a warning. Do not make Redis a hard requirement.
 
@@ -156,6 +180,8 @@ Shield is registered once in `app.module.ts` with `ShieldModule.forEnv()` and ap
 - `railway.json` sets the start command and uses `/health` as the healthcheck. Keep `/health` fast and unauthenticated.
 - Railway provides `PORT`. The app already listens on `0.0.0.0`.
 - Services: API + Redis (lite), or API + Redis + Postgres (full). Reference variables in Railway, for example `REDIS_URL=${{Redis.REDIS_URL}}` and `DATABASE_URL=${{Postgres.DATABASE_URL}}`.
+- Required in production: `JWT_SECRET` (32+ characters). Set `NODE_ENV=production`.
+- Full setup steps for publishing the templates are in `docs/RAILWAY_TEMPLATES.md`.
 
 ## Definition of done
 

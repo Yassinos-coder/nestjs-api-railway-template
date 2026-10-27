@@ -15,5 +15,11 @@ export class EnvValidator {
       .default(''),
     DATABASE_SSL: Joi.boolean().default(false),
     REDIS_URL: Joi.string().allow('').default(''),
+    JWT_SECRET: Joi.string().min(32).when('NODE_ENV', {
+      is: 'production',
+      then: Joi.required(),
+      otherwise: Joi.optional().allow(''),
+    }),
+    JWT_EXPIRES_IN_SECONDS: Joi.number().integer().min(60).default(3600),
   }).unknown(true);
 }
