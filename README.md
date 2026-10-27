@@ -1,5 +1,7 @@
 # NestJS API - Railway Template
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/nestjs-api-redis)
+
 A complete NestJS API server you can deploy on Railway in one click, run on your own machine, or clone as the starting point for your own API. It comes with a layered project structure, optional Postgres, and built-in protection against abuse from [nestjs-shield](https://github.com/yassinos-coder/nestjs-shield) (rate limiting, auto-ban, Redis-backed counters).
 
 ## What it is, and what it is not
