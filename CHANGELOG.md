@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-27
+
+### Added
+
+- Demo feature that shows each preinstalled library in use: rate limiting, validated and sanitized input, bcrypt hashing and the database layer, with a README listing what each route teaches
+
+### Changed
+
+- The template is now blank: no built-in authentication. Agents are told to verify an external provider's tokens (such as Supabase Auth) or build login only when asked
+- Railway publishing guide now describes a single API + Redis template, with no Postgres service
+
+### Removed
+
+- JWT register and login routes, the `users` table creation, and the `JWT_SECRET` and `JWT_EXPIRES_IN_SECONDS` settings
+
 ## [0.2.0] - 2026-10-27
 
 ### Added

@@ -6,9 +6,11 @@ Instructions for AI coding agents (Claude Code, Codex, Cursor, Copilot, and othe
 
 A general-purpose NestJS API server ("NestJS API - Railway Template"). It is a starting point for building any REST API, not a Shield demo. `nestjs-shield` is one built-in layer that adds rate limiting, auto-ban and Redis-backed counters. The app is designed to deploy on Railway and also runs locally. Postgres is optional and driven by `DATABASE_URL`.
 
-Included: server bootstrap, security headers, input sanitization and validation, optional CORS, env validation, structured logging, API docs, health check, optional database access, Shield, JWT authentication (register, login, protected route), tests, linting, and one example feature (`demo`).
+Included: server bootstrap, security headers, input sanitization and validation, optional CORS, env validation, structured logging, API docs, health check, optional database access, Shield, tests, linting, and a `demo` feature (`src/demo/`) that shows how each library is used.
 
-Not included: payments, roles and permissions, email, migrations, a frontend. Add these as feature modules following the rules below.
+Deliberately not included: authentication, users, payments, email, migrations, a frontend. The template is blank so you can build what the user asks for. Many users authenticate with an external provider (for example Supabase Auth, Clerk or Auth0) and only need this API to verify the tokens that provider issues. Ask or check before building your own login system.
+
+Start by reading `src/demo/`: it is a small working example of the layering and of each preinstalled library. Copy its shape for new features and delete it when it is no longer needed (remove `DemoModule` from `src/app.module.ts`).
 
 Stack: NestJS 12, TypeScript 6, Express adapter, Node 22.12 or newer. Nest 12 packages are ESM, and the compiled CommonJS output relies on Node's `require(esm)` support, so do not lower the Node version.
 
@@ -31,30 +33,19 @@ The user may not be a programmer and may only describe what they want in plain l
 | `compression` | gzip responses | `main.ts` |
 | `@nestjs/config` | Typed config | `src/config/configuration.ts` |
 | `pg` | Postgres client | `DatabaseRepository` |
-| `@nestjs/jwt`, `bcryptjs` | JWT tokens and password hashing for the auth feature | `src/auth/` |
+| `bcryptjs` | Password hashing (demonstrated in `src/demo/services/demo.service.ts`) | `src/demo/` |
+| `@nestjs/jwt` | Installed for signing or verifying JWTs. Not wired into any module yet: register `JwtModule` in the feature that needs it, with algorithms restricted to `HS256` (or your provider's), and read the secret from config | none yet |
 | `node:test` (built into Node), `@nestjs/testing` | Tests | `*.spec.ts` next to the code |
 | `eslint`, `typescript-eslint`, `eslint-plugin-security` | Linting including security rules | `eslint.config.mjs` |
 
-## Authentication (already built)
+## If the user asks for authentication
 
-`src/auth/` provides:
+There is no auth in this template. Decide based on what the user already uses:
 
-| Route | Protection | Purpose |
-| --- | --- | --- |
-| `POST /auth/register` | `@RateLimit` 5 per window | Create an account, returns a token |
-| `POST /auth/login` | `@RateLimit` 5 per window | Returns a token |
-| `GET /auth/me` | `JwtAuthGuard` | Returns the current user |
+- **External provider (Supabase Auth, Clerk, Auth0, Firebase, Google or Apple sign-in through one of them):** the frontend logs in with the provider and sends its access token as `Authorization: Bearer ...`. Build a guard in `src/auth/guards/` that verifies that token (signature, expiry, issuer, audience) using the provider's documented keys, and put the verified user on the request. Do not build passwords or a users table.
+- **No provider:** build email and password login with `bcryptjs` and `@nestjs/jwt`. Rules: never store, log or return a password or hash; return the same error for an unknown email and a wrong password; restrict JWT algorithms explicitly; require a strong `JWT_SECRET` (add it to the Joi schema, `.env.example` and the README); put a strict `@RateLimit` on register and login.
 
-To protect any route, add `@UseGuards(JwtAuthGuard)` and `@ApiBearerAuth()`. Import `AuthModule` in the feature module, since it exports the guard. The logged-in user is on `request.user` (`{ sub, email }`, typed as `AuthenticatedRequest`).
-
-Rules for anything touching accounts:
-
-- Passwords are hashed with `bcryptjs` (12 rounds). Never store, log or return a password or hash. Use `UserMapper.toPublic` for any user response.
-- Login returns the same error for an unknown email and a wrong password. Keep it that way.
-- Tokens are HS256 only, signed with `JWT_SECRET`. In production the app refuses to start without a secret of at least 32 characters. In development a random secret is generated at boot, so tokens stop working after a restart.
-- The `users` table is created automatically at startup when `DATABASE_URL` is set. Without a database, register and login return 503.
-- Strict `@RateLimit` routes share one bucket per IP, so login and register together allow about 5 attempts per window. Keep strict limits on any new sensitive route.
-- For roles, add a `role` column and a `RolesGuard` in `src/auth/guards/`. Do not trust a role sent by the client.
+Never trust a role or user id sent by the client. Take identity only from a verified token.
 
 ## Commands
 
@@ -82,12 +73,11 @@ src/
 ├── config/
 │   ├── configuration.ts     the only place that reads process.env for app settings
 │   └── validators/env.validator.ts   Joi schema for environment variables
-├── auth/                    register, login, JwtAuthGuard, users repository (full feature example)
 ├── database/
 │   ├── database.module.ts
 │   └── repositories/database.repository.ts   pg pool, query(), ping()
 ├── health/                  GET /health (skipped by Shield, used by Railway)
-└── demo/                    GET /demo/rate-limit, example of a feature module
+└── demo/                    working examples of Shield, validation, sanitization, bcrypt and the database layer (see demo/README.md)
 ```
 
 Every feature is a folder with this shape:
@@ -162,6 +152,7 @@ Shield is registered once in `app.module.ts` with `ShieldModule.forEnv()` and ap
 ```
 
 - Use a strict `@RateLimit` on login, signup, password reset and any expensive route.
+- Routes with a strict `@RateLimit` share one bucket per IP, so several strict routes together allow about the strictest limit per window. Keep this in mind when adding more.
 - Use `@SkipShield()` only for infrastructure routes such as `/health`.
 - Scanner probes (requests to paths like `/.env`) count toward auto-ban by default (`SHIELD_PROBES=true`). Repeated offenders get a `403` ban, stored in Redis when available.
 - `forEnv()` also reads `SHIELD_AUTOBAN_THRESHOLD`, `SHIELD_AUTOBAN_WINDOW`, `SHIELD_AUTOBAN_DURATION`, `SHIELD_BURST_MAX`, `SHIELD_MAX_BODY_BYTES` and `SHIELD_ALGORITHM`. For options it does not expose (whitelist, blacklist, custom keys), switch `app.module.ts` to `ShieldModule.forRoot({ ... })` or `forRootAsync`. Full options: <https://github.com/yassinos-coder/nestjs-shield>
@@ -179,9 +170,9 @@ Shield is registered once in `app.module.ts` with `ShieldModule.forEnv()` and ap
 
 - `railway.json` sets the start command and uses `/health` as the healthcheck. Keep `/health` fast and unauthenticated.
 - Railway provides `PORT`. The app already listens on `0.0.0.0`.
-- Services: API + Redis (lite), or API + Redis + Postgres (full). Reference variables in Railway, for example `REDIS_URL=${{Redis.REDIS_URL}}` and `DATABASE_URL=${{Postgres.DATABASE_URL}}`.
-- Required in production: `JWT_SECRET` (32+ characters). Set `NODE_ENV=production`.
-- Full setup steps for publishing the templates are in `docs/RAILWAY_TEMPLATES.md`.
+- Services: API + Redis. There is no Postgres service. Users bring their own database (for example Supabase) through `DATABASE_URL`. Reference the Redis variable in Railway as `REDIS_URL=${{Redis.REDIS_URL}}`.
+- Set `NODE_ENV=production` on Railway. Swagger (`/docs`) is then off unless `SWAGGER_ENABLED=true`.
+- Publishing steps for the Railway template are in `docs/RAILWAY_TEMPLATES.md`.
 
 ## Definition of done
 
